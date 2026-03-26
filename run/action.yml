@@ -66,6 +66,8 @@ runs:
         path: |
           .migrataur/scan-report.json
           .migrataur/scan-report.md
+          .migrataur/plan-review-response.txt
+          .migrataur/migration-plan.json
         retention-days: 90
         if-no-files-found: warn
 
