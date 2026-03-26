@@ -33,7 +33,7 @@ elif [ -n "${MIGRATAUR_OPENAI_KEY:-}" ]; then
   export OPENAI_API_KEY="$MIGRATAUR_OPENAI_KEY"
 elif [ -n "${MIGRATAUR_GEMINI_KEY:-}" ]; then
   LLM_PROVIDER="google"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gemini-2.0-flash}"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gemini-2.5-flash}"
   export GEMINI_API_KEY="$MIGRATAUR_GEMINI_KEY"
 elif [ -n "${MIGRATAUR_OPENROUTER_KEY:-}" ]; then
   LLM_PROVIDER="openrouter"
