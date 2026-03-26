@@ -236,6 +236,15 @@ if ! jq empty "$PI_CONFIG_DIR/models.json" 2>"$LOG_DIR/pi-config-validate.stderr
 fi
 echo "Pi models.json written and validated"
 
+# Pi defaults to --provider google without settings.json
+cat > "$PI_CONFIG_DIR/settings.json" <<'EOF'
+{
+  "defaultModel": "kimi-k2.5:cloud",
+  "defaultProvider": "ollama"
+}
+EOF
+echo "Pi settings.json written (defaultProvider=ollama, defaultModel=kimi-k2.5:cloud)"
+
 echo "::endgroup::"
 
 # ── Pi health check: verify Ollama /v1 endpoint ──────────────────────────────
