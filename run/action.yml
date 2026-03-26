@@ -25,7 +25,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/.indieprise/bin
-        key: indieprise-bins-v0.1.4-bot
+        key: indieprise-bins-v0.1.5-bot
 
     - name: Cache Ollama
       uses: actions/cache@v4

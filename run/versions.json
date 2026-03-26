@@ -1,6 +1,6 @@
 {
   "migrataur": {
-    "version": "v0.1.4-bot",
+    "version": "v0.1.5-bot",
     "repo": "singhularity/Migrataur",
     "binary": "migrataur-linux-amd64"
   },
