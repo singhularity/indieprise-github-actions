@@ -17,6 +17,35 @@ PREXPLAINER_VERSION=$(jq -r '.prexplainer.version' "$VERSIONS_FILE")
 PREXPLAINER_REPO=$(jq -r '.prexplainer.repo' "$VERSIONS_FILE")
 PREXPLAINER_BINARY=$(jq -r '.prexplainer.binary' "$VERSIONS_FILE")
 
+# ── Detect LLM provider ──────────────────────────────────────────────────────
+# Cloud API keys take priority over Ollama. If any cloud key is set, skip
+# Ollama entirely — no install, no model pull, no SSH keys needed.
+LLM_PROVIDER=""
+LLM_MODEL=""
+
+if [ -n "${MIGRATAUR_ANTHROPIC_KEY:-}" ]; then
+  LLM_PROVIDER="anthropic"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-claude-haiku-4-5-20251001}"
+  export ANTHROPIC_API_KEY="$MIGRATAUR_ANTHROPIC_KEY"
+elif [ -n "${MIGRATAUR_OPENAI_KEY:-}" ]; then
+  LLM_PROVIDER="openai"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gpt-4o-mini}"
+  export OPENAI_API_KEY="$MIGRATAUR_OPENAI_KEY"
+elif [ -n "${MIGRATAUR_GEMINI_KEY:-}" ]; then
+  LLM_PROVIDER="google"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gemini-2.0-flash}"
+  export GEMINI_API_KEY="$MIGRATAUR_GEMINI_KEY"
+elif [ -n "${MIGRATAUR_OPENROUTER_KEY:-}" ]; then
+  LLM_PROVIDER="openrouter"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-anthropic/claude-haiku-4-5-20251001}"
+  export OPENROUTER_API_KEY="$MIGRATAUR_OPENROUTER_KEY"
+else
+  LLM_PROVIDER="ollama"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-kimi-k2.5:cloud}"
+fi
+
+echo "LLM provider: $LLM_PROVIDER (model: $LLM_MODEL)"
+
 # ── Download binaries ─────────────────────────────────────────────────────────
 echo "::group::Download Indieprise binaries"
 
@@ -64,80 +93,79 @@ fi
 
 echo "::endgroup::"
 
-# ── Install Ollama ────────────────────────────────────────────────────────────
-echo "::group::Install Ollama"
+# ── Ollama (only if provider=ollama) ──────────────────────────────────────────
+if [ "$LLM_PROVIDER" = "ollama" ]; then
+  echo "::group::Install Ollama"
 
-if command -v ollama &>/dev/null; then
-  echo "Ollama already installed at $(command -v ollama) — skipping install"
-else
-  echo "Installing Ollama..."
-  curl -fsSL https://ollama.com/install.sh 2>"$LOG_DIR/ollama-install.stderr" | sh 2>>"$LOG_DIR/ollama-install.stderr"
-  if ! command -v ollama &>/dev/null; then
-    echo "::error::Ollama not on PATH after install"
-    cat "$LOG_DIR/ollama-install.stderr"
+  if command -v ollama &>/dev/null; then
+    echo "Ollama already installed at $(command -v ollama) — skipping install"
+  else
+    echo "Installing Ollama..."
+    curl -fsSL https://ollama.com/install.sh 2>"$LOG_DIR/ollama-install.stderr" | sh 2>>"$LOG_DIR/ollama-install.stderr"
+    if ! command -v ollama &>/dev/null; then
+      echo "::error::Ollama not on PATH after install"
+      cat "$LOG_DIR/ollama-install.stderr"
+      exit 1
+    fi
+    echo "Ollama installed"
+  fi
+
+  echo "::endgroup::"
+
+  # Configure Ollama SSH keys (for cloud models)
+  if [ -n "${INDIEPRISE_RUNTIME_KEY:-}" ]; then
+    echo "::group::Configure Ollama SSH key"
+    mkdir -p "${HOME}/.ollama"
+    echo "$INDIEPRISE_RUNTIME_KEY" > "${HOME}/.ollama/id_ed25519"
+    chmod 600 "${HOME}/.ollama/id_ed25519"
+    echo "Ollama SSH key written"
+    echo "::endgroup::"
+  fi
+
+  # Start Ollama server
+  echo "::group::Start Ollama server"
+
+  if ! curl -sf http://127.0.0.1:11434/api/tags &>/dev/null; then
+    ollama serve >"$LOG_DIR/ollama-serve.stdout" 2>"$LOG_DIR/ollama-serve.stderr" &
+    echo "Started ollama serve in background (PID $!)"
+  fi
+
+  echo "Waiting for Ollama to be ready..."
+  OLLAMA_READY=false
+  for i in $(seq 1 30); do
+    if curl -sf http://127.0.0.1:11434/api/tags &>/dev/null; then
+      OLLAMA_READY=true
+      echo "Ollama is ready (attempt $i)"
+      break
+    fi
+    sleep 1
+  done
+  if [ "$OLLAMA_READY" != "true" ]; then
+    echo "::error::Ollama did not become ready within 30 seconds"
+    cat "$LOG_DIR/ollama-serve.stderr" 2>/dev/null || echo "(no log)"
+    systemctl status ollama 2>/dev/null || true
     exit 1
   fi
-  echo "Ollama installed"
-fi
 
-echo "::endgroup::"
+  echo "::endgroup::"
 
-# ── Configure Ollama SSH keys (for cloud models) ─────────────────────────────
-if [ -n "${INDIEPRISE_RUNTIME_KEY:-}" ]; then
-  echo "::group::Configure Ollama SSH key"
-  mkdir -p "${HOME}/.ollama"
-  echo "$INDIEPRISE_RUNTIME_KEY" > "${HOME}/.ollama/id_ed25519"
-  chmod 600 "${HOME}/.ollama/id_ed25519"
-  echo "Ollama SSH key written"
+  # Pull model
+  echo "::group::Pull Ollama model"
+  echo "Pulling $LLM_MODEL..."
+  ollama pull "$LLM_MODEL" 2>"$LOG_DIR/ollama-pull.stderr"
+  if [ $? -ne 0 ]; then
+    echo "::error::Failed to pull model $LLM_MODEL"
+    cat "$LOG_DIR/ollama-pull.stderr"
+    exit 1
+  fi
+  echo "Model pull complete"
+  echo "::endgroup::"
+
+else
+  echo "::group::Cloud LLM provider ($LLM_PROVIDER)"
+  echo "Skipping Ollama — using $LLM_PROVIDER with model $LLM_MODEL"
   echo "::endgroup::"
 fi
-
-# ── Start Ollama server ───────────────────────────────────────────────────────
-echo "::group::Start Ollama server"
-
-# The Ollama install script starts ollama via systemd when available.
-# If systemd isn't running (e.g. in containers), we start it manually.
-# Either way, we wait for the endpoint to be ready.
-if ! curl -sf http://127.0.0.1:11434/api/tags &>/dev/null; then
-  # Not running yet — try starting manually
-  ollama serve >"$LOG_DIR/ollama-serve.stdout" 2>"$LOG_DIR/ollama-serve.stderr" &
-  echo "Started ollama serve in background (PID $!)"
-fi
-
-echo "Waiting for Ollama to be ready..."
-OLLAMA_READY=false
-for i in $(seq 1 30); do
-  if curl -sf http://127.0.0.1:11434/api/tags &>/dev/null; then
-    OLLAMA_READY=true
-    echo "Ollama is ready (attempt $i)"
-    break
-  fi
-  sleep 1
-done
-if [ "$OLLAMA_READY" != "true" ]; then
-  echo "::error::Ollama did not become ready within 30 seconds"
-  echo "--- Ollama stderr ---"
-  cat "$LOG_DIR/ollama-serve.stderr" 2>/dev/null || echo "(no log)"
-  echo "--- systemd status ---"
-  systemctl status ollama 2>/dev/null || echo "(not a systemd service)"
-  exit 1
-fi
-
-echo "::endgroup::"
-
-# ── Pull model ────────────────────────────────────────────────────────────────
-echo "::group::Pull Ollama model"
-
-echo "Pulling kimi-k2.5:cloud..."
-ollama pull kimi-k2.5:cloud 2>"$LOG_DIR/ollama-pull.stderr"
-if [ $? -ne 0 ]; then
-  echo "::error::Failed to pull model kimi-k2.5:cloud"
-  cat "$LOG_DIR/ollama-pull.stderr"
-  exit 1
-fi
-echo "Model pull complete"
-
-echo "::endgroup::"
 
 # ── Install Pi ────────────────────────────────────────────────────────────────
 echo "::group::Install Pi"
@@ -155,12 +183,10 @@ else
   echo "Pi installed"
 fi
 
-# Verify pi CLI is on PATH
 PI_PATH=$(command -v pi 2>/dev/null || true)
 if [ -z "$PI_PATH" ]; then
   echo "::error::pi CLI not found on PATH after install"
   echo "npm global bin: $(npm bin -g 2>/dev/null || echo 'unknown')"
-  echo "PATH: $PATH"
   cat "$LOG_DIR/pi-install.stderr" 2>/dev/null || true
   exit 1
 fi
@@ -168,13 +194,15 @@ echo "Pi at: $PI_PATH ($(pi --version 2>/dev/null || echo 'unknown version'))"
 
 echo "::endgroup::"
 
-# ── Configure Pi models ───────────────────────────────────────────────────────
-echo "::group::Configure Pi models"
+# ── Configure Pi ──────────────────────────────────────────────────────────────
+echo "::group::Configure Pi"
 
 PI_CONFIG_DIR="${HOME}/.pi/agent"
 mkdir -p "$PI_CONFIG_DIR"
 
-cat > "$PI_CONFIG_DIR/models.json" <<'EOF'
+if [ "$LLM_PROVIDER" = "ollama" ]; then
+  # Ollama: write models.json with local provider
+  cat > "$PI_CONFIG_DIR/models.json" <<'MODELSEOF'
 {
   "providers": {
     "ollama": {
@@ -182,81 +210,53 @@ cat > "$PI_CONFIG_DIR/models.json" <<'EOF'
       "apiKey": "ollama",
       "baseUrl": "http://127.0.0.1:11434/v1",
       "models": [
-        {
-          "_launch": true,
-          "id": "kimi-k2.5:cloud",
-          "input": ["text", "image"],
-          "reasoning": true
-        },
-        {
-          "id": "qwen3:8b",
-          "input": ["text"],
-          "reasoning": false
-        },
-        {
-          "id": "qwen3:30b-a3b",
-          "input": ["text"],
-          "reasoning": true
-        },
-        {
-          "id": "gemma3:4b-cloud",
-          "input": ["text"],
-          "reasoning": false
-        },
-        {
-          "id": "gemma3:27b-cloud",
-          "input": ["text"],
-          "reasoning": false
-        },
-        {
-          "id": "deepseek-v3.1:671b-cloud",
-          "input": ["text"],
-          "reasoning": true
-        },
-        {
-          "id": "qwen3-coder:480b-cloud",
-          "input": ["text"],
-          "reasoning": true
-        },
-        {
-          "id": "gpt-oss:20b-cloud",
-          "input": ["text"],
-          "reasoning": false
-        }
+        { "_launch": true, "id": "kimi-k2.5:cloud", "input": ["text", "image"], "reasoning": true },
+        { "id": "qwen3:8b", "input": ["text"], "reasoning": false },
+        { "id": "qwen3:30b-a3b", "input": ["text"], "reasoning": true },
+        { "id": "gemma3:4b-cloud", "input": ["text"], "reasoning": false },
+        { "id": "gemma3:27b-cloud", "input": ["text"], "reasoning": false },
+        { "id": "deepseek-v3.1:671b-cloud", "input": ["text"], "reasoning": true },
+        { "id": "qwen3-coder:480b-cloud", "input": ["text"], "reasoning": true },
+        { "id": "gpt-oss:20b-cloud", "input": ["text"], "reasoning": false }
       ]
     }
   }
 }
-EOF
+MODELSEOF
 
-if ! jq empty "$PI_CONFIG_DIR/models.json" 2>"$LOG_DIR/pi-config-validate.stderr"; then
-  echo "::error::models.json is not valid JSON"
-  cat "$LOG_DIR/pi-config-validate.stderr"
-  exit 1
+  if ! jq empty "$PI_CONFIG_DIR/models.json" 2>"$LOG_DIR/pi-config-validate.stderr"; then
+    echo "::error::models.json is not valid JSON"
+    cat "$LOG_DIR/pi-config-validate.stderr"
+    exit 1
+  fi
+  echo "Pi models.json written (Ollama provider)"
 fi
-echo "Pi models.json written and validated"
 
-# Pi defaults to --provider google without settings.json
-cat > "$PI_CONFIG_DIR/settings.json" <<'EOF'
+# Write settings.json with detected provider
+cat > "$PI_CONFIG_DIR/settings.json" <<EOF
 {
-  "defaultModel": "kimi-k2.5:cloud",
-  "defaultProvider": "ollama"
+  "defaultModel": "$LLM_MODEL",
+  "defaultProvider": "$LLM_PROVIDER"
 }
 EOF
-echo "Pi settings.json written (defaultProvider=ollama, defaultModel=kimi-k2.5:cloud)"
+echo "Pi settings.json written (provider=$LLM_PROVIDER, model=$LLM_MODEL)"
 
 echo "::endgroup::"
 
-# ── Pi health check: verify Ollama /v1 endpoint ──────────────────────────────
-echo "::group::Pi health check"
-OLLAMA_V1_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:11434/v1/models 2>/dev/null || echo "000")
-if [ "$OLLAMA_V1_STATUS" != "200" ]; then
-  echo "::warning::Ollama /v1/models returned HTTP $OLLAMA_V1_STATUS — Pi may fail to connect"
-  echo "Ollama /api/tags response:"
-  curl -s http://127.0.0.1:11434/api/tags 2>/dev/null | jq . 2>/dev/null || echo "(failed)"
+# ── Health check ──────────────────────────────────────────────────────────────
+echo "::group::Health check"
+
+if [ "$LLM_PROVIDER" = "ollama" ]; then
+  OLLAMA_V1_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:11434/v1/models 2>/dev/null || echo "000")
+  if [ "$OLLAMA_V1_STATUS" != "200" ]; then
+    echo "::warning::Ollama /v1/models returned HTTP $OLLAMA_V1_STATUS"
+  else
+    echo "Ollama /v1/models OK"
+  fi
 else
-  echo "Ollama /v1/models OK — Pi can reach the LLM backend"
+  echo "Cloud provider $LLM_PROVIDER — API key present, no local health check needed"
 fi
+
 echo "::endgroup::"
 
 # ── Export binary path ────────────────────────────────────────────────────────
@@ -266,8 +266,11 @@ echo "$BIN_DIR" >> "$GITHUB_PATH"
 echo "::group::Bootstrap verification"
 "$BIN_DIR/migrataur" --version 2>"$LOG_DIR/migrataur-version.stderr" || {
   echo "::warning::migrataur --version failed"; cat "$LOG_DIR/migrataur-version.stderr"; }
-echo "ollama: $(ollama --version 2>/dev/null || echo 'unknown')"
+if [ "$LLM_PROVIDER" = "ollama" ]; then
+  echo "ollama: $(ollama --version 2>/dev/null || echo 'unknown')"
+fi
 echo "pi: $(pi --version 2>/dev/null || echo 'unknown')"
+echo "provider: $LLM_PROVIDER | model: $LLM_MODEL"
 echo "Log dir: $LOG_DIR"
 ls -la "$LOG_DIR/"
 echo "Bootstrap complete."
