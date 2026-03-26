@@ -5,16 +5,18 @@ MODE="${1:-scan}"
 LOG_DIR="/tmp/indieprise-bootstrap-logs"
 mkdir -p "$LOG_DIR"
 
-# Pre-flight: verify Ollama endpoint is reachable (Pi depends on it)
-if ! curl -s http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-  echo "::error::Ollama endpoint not reachable at http://127.0.0.1:11434"
-  echo "--- Ollama stderr ---"
-  cat "$LOG_DIR/ollama-serve.stderr" 2>/dev/null || echo "(no stderr log)"
-  echo "Attempting to check systemd service:"
-  systemctl status ollama 2>/dev/null || echo "(not a systemd service)"
-  exit 1
+# Pre-flight: verify LLM backend is reachable
+# Skip Ollama check if a cloud API key was detected (ANTHROPIC_API_KEY, etc.)
+if [ -z "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}${GEMINI_API_KEY:-}${OPENROUTER_API_KEY:-}" ]; then
+  if ! curl -s http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+    echo "::error::Ollama endpoint not reachable at http://127.0.0.1:11434"
+    cat "$LOG_DIR/ollama-serve.stderr" 2>/dev/null || echo "(no stderr log)"
+    exit 1
+  fi
+  echo "Ollama endpoint OK"
+else
+  echo "Cloud LLM provider detected — skipping Ollama check"
 fi
-echo "Ollama endpoint OK"
 
 case "$MODE" in
   scan)
