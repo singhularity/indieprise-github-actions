@@ -62,6 +62,7 @@ runs:
       run: ${{ github.action_path }}/scripts/run-migrataur.sh ${{ inputs.mode }}
       env:
         GH_TOKEN: ${{ github.token }}
+        INDIEPRISE_LLM_KEY: ${{ inputs.llm-key }}
 
     - name: Upload scan report
       if: inputs.mode == 'scan'

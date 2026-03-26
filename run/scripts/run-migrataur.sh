@@ -7,7 +7,7 @@ mkdir -p "$LOG_DIR"
 
 # Pre-flight: verify LLM backend is reachable
 # Skip Ollama check if a cloud API key was detected (ANTHROPIC_API_KEY, etc.)
-if [ -z "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}${GEMINI_API_KEY:-}${OPENROUTER_API_KEY:-}" ]; then
+if [ -z "${INDIEPRISE_LLM_KEY:-}${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}${GEMINI_API_KEY:-}${OPENROUTER_API_KEY:-}" ]; then
   if ! curl -s http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
     echo "::error::Ollama endpoint not reachable at http://127.0.0.1:11434"
     cat "$LOG_DIR/ollama-serve.stderr" 2>/dev/null || echo "(no stderr log)"
