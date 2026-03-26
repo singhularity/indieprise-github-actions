@@ -28,34 +28,47 @@ LLM_MODEL=""
 LLM_KEY="${INDIEPRISE_LLM_KEY:-}"
 
 if [ -n "$LLM_KEY" ]; then
+  # Detect provider from key prefix
+  AUTH_JSON_KEY=""
   case "$LLM_KEY" in
     sk-ant-*|anthropic-*)
       LLM_PROVIDER="anthropic"
       LLM_MODEL="${MIGRATAUR_LLM_MODEL:-claude-haiku-4-5-20251001}"
-      export ANTHROPIC_API_KEY="$LLM_KEY"
+      AUTH_JSON_KEY="anthropic"
+      echo "ANTHROPIC_API_KEY=$LLM_KEY" >> "$GITHUB_ENV"
       ;;
     sk-*)
       LLM_PROVIDER="openai"
       LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gpt-4.1-mini}"
-      export OPENAI_API_KEY="$LLM_KEY"
+      AUTH_JSON_KEY="openai"
+      echo "OPENAI_API_KEY=$LLM_KEY" >> "$GITHUB_ENV"
       ;;
     AIza*)
       LLM_PROVIDER="google"
       LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gemini-2.5-flash}"
-      export GEMINI_API_KEY="$LLM_KEY"
+      AUTH_JSON_KEY="google"
+      echo "GEMINI_API_KEY=$LLM_KEY" >> "$GITHUB_ENV"
       ;;
     sk-or-*)
       LLM_PROVIDER="openrouter"
       LLM_MODEL="${MIGRATAUR_LLM_MODEL:-anthropic/claude-haiku-4-5-20251001}"
-      export OPENROUTER_API_KEY="$LLM_KEY"
+      AUTH_JSON_KEY="openrouter"
+      echo "OPENROUTER_API_KEY=$LLM_KEY" >> "$GITHUB_ENV"
       ;;
     *)
-      # Unknown prefix — assume Anthropic (most common)
       LLM_PROVIDER="anthropic"
       LLM_MODEL="${MIGRATAUR_LLM_MODEL:-claude-haiku-4-5-20251001}"
-      export ANTHROPIC_API_KEY="$LLM_KEY"
+      AUTH_JSON_KEY="anthropic"
+      echo "ANTHROPIC_API_KEY=$LLM_KEY" >> "$GITHUB_ENV"
       ;;
   esac
+
+  # Write auth.json — Pi checks this BEFORE env vars (resolution order:
+  # --api-key > auth.json > env var). Belt and suspenders.
+  PI_AUTH_DIR="${HOME}/.pi/agent"
+  mkdir -p "$PI_AUTH_DIR"
+  printf '{ "%s": { "type": "api_key", "key": "%s" } }' "$AUTH_JSON_KEY" "$LLM_KEY" > "$PI_AUTH_DIR/auth.json"
+  chmod 600 "$PI_AUTH_DIR/auth.json"
 else
   LLM_PROVIDER="ollama"
   LLM_MODEL="${MIGRATAUR_LLM_MODEL:-kimi-k2.5:cloud}"
@@ -218,7 +231,7 @@ PI_CONFIG_DIR="${HOME}/.pi/agent"
 mkdir -p "$PI_CONFIG_DIR"
 
 if [ "$LLM_PROVIDER" = "ollama" ]; then
-  # Ollama: write models.json with local provider
+  # Ollama: write models.json with local provider config
   cat > "$PI_CONFIG_DIR/models.json" <<'MODELSEOF'
 {
   "providers": {
@@ -247,6 +260,10 @@ MODELSEOF
     exit 1
   fi
   echo "Pi models.json written (Ollama provider)"
+else
+  # Cloud provider: clear models.json so Pi doesn't try to connect to Ollama
+  echo '{}' > "$PI_CONFIG_DIR/models.json"
+  echo "Pi models.json cleared (cloud provider, no Ollama)"
 fi
 
 # Write settings.json with detected provider
