@@ -23,9 +23,14 @@ case "$MODE" in
     MIGRATAUR_STDERR="$LOG_DIR/migrataur-scan.stderr"
     MIGRATAUR_STDOUT="$LOG_DIR/migrataur-scan.stdout"
 
-    echo "Running migrataur in scan-only mode on $GITHUB_WORKSPACE..."
+    # --job-id triggers hosted mode: migrataur spawns Pi directly (PiBridge)
+    # Without it, migrataur uses StdioBridge (MCP mode) which expects an
+    # external bridge process on stdin — nobody writes to stdin in CI.
+    JOB_ID="gha-$(date +%s)"
+
+    echo "Running migrataur in scan-only mode on $GITHUB_WORKSPACE (job=$JOB_ID)..."
     set +e
-    migrataur migrate --project-dir "$GITHUB_WORKSPACE" --scan-only \
+    migrataur migrate --project-dir "$GITHUB_WORKSPACE" --scan-only --job-id "$JOB_ID" \
       >"$MIGRATAUR_STDOUT" 2>"$MIGRATAUR_STDERR"
     MIGRATAUR_EXIT=$?
     set -e
@@ -92,9 +97,10 @@ case "$MODE" in
     MIGRATAUR_STDERR="$LOG_DIR/migrataur-migrate.stderr"
     MIGRATAUR_STDOUT="$LOG_DIR/migrataur-migrate.stdout"
 
-    echo "Running migrataur in pull-request output mode on $GITHUB_WORKSPACE..."
+    JOB_ID="gha-$(date +%s)"
+    echo "Running migrataur in pull-request output mode on $GITHUB_WORKSPACE (job=$JOB_ID)..."
     set +e
-    migrataur migrate --project-dir "$GITHUB_WORKSPACE" --output-mode pull-request \
+    migrataur migrate --project-dir "$GITHUB_WORKSPACE" --output-mode pull-request --job-id "$JOB_ID" \
       >"$MIGRATAUR_STDOUT" 2>"$MIGRATAUR_STDERR"
     MIGRATAUR_EXIT=$?
     set -e
