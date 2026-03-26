@@ -30,7 +30,7 @@ case "$MODE" in
 
     echo "Running migrataur in scan-only mode on $GITHUB_WORKSPACE (job=$JOB_ID)..."
     set +e
-    migrataur migrate --project-dir "$GITHUB_WORKSPACE" --scan-only --job-id "$JOB_ID" \
+    RUST_LOG=info migrataur migrate --project-dir "$GITHUB_WORKSPACE" --scan-only --job-id "$JOB_ID" \
       >"$MIGRATAUR_STDOUT" 2>"$MIGRATAUR_STDERR"
     MIGRATAUR_EXIT=$?
     set -e
@@ -100,7 +100,7 @@ case "$MODE" in
     JOB_ID="gha-$(date +%s)"
     echo "Running migrataur in pull-request output mode on $GITHUB_WORKSPACE (job=$JOB_ID)..."
     set +e
-    migrataur migrate --project-dir "$GITHUB_WORKSPACE" --output-mode pull-request --job-id "$JOB_ID" \
+    RUST_LOG=info migrataur migrate --project-dir "$GITHUB_WORKSPACE" --output-mode pull-request --job-id "$JOB_ID" \
       >"$MIGRATAUR_STDOUT" 2>"$MIGRATAUR_STDERR"
     MIGRATAUR_EXIT=$?
     set -e
