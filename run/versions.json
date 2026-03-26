@@ -1,0 +1,8 @@
+{
+  "migrataur": {
+    "version": "v0.1.0-bot",
+    "repo": "singhularity/Migrataur",
+    "binary": "migrataur-linux-amd64"
+  },
+  "prexplainer": null
+}

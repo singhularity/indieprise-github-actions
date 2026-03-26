@@ -1,0 +1,37 @@
+name: Test Indieprise Action
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [scan, migrate]
+        default: scan
+
+jobs:
+  test-bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test project
+        run: |
+          mkdir -p test-project
+          cat > test-project/package.json << 'EOF'
+          {
+            "name": "test-project",
+            "version": "1.0.0",
+            "dependencies": {
+              "express": "^4.17.0"
+            }
+          }
+          EOF
+
+      - name: Run Indieprise action
+        uses: ./run
+        with:
+          mode: ${{ github.event.inputs.mode || 'scan' }}
+          gh-token: ${{ secrets.INDIEPRISE_GH_PAT }}
+          runtime-key: ${{ secrets.INDIEPRISE_RUNTIME_KEY }}
+        env:
+          INDIEPRISE_CONFIG_KEY: ${{ secrets.INDIEPRISE_CONFIG_KEY }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}/test-project

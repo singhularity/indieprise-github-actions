@@ -1,0 +1,79 @@
+name: 'Indieprise Run'
+description: 'Scan repos for migration opportunities or execute migrations with PR output'
+inputs:
+  mode:
+    description: 'scan or migrate'
+    required: false
+    default: 'scan'
+  gh-token:
+    description: 'GitHub token with access to download tool binaries from private repos'
+    required: false
+    default: ''
+  runtime-key:
+    description: 'Runtime authentication key for model access'
+    required: false
+    default: ''
+  runtime-origin:
+    description: 'Runtime configuration origin'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache Indieprise binaries
+      uses: actions/cache@v4
+      with:
+        path: ~/.indieprise/bin
+        key: indieprise-bins-${{ hashFiles('**/versions.json') }}
+
+    - name: Cache Ollama
+      uses: actions/cache@v4
+      with:
+        path: /usr/local/bin/ollama
+        key: ollama-bin-${{ runner.os }}
+
+    - name: Cache npm
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: pi-npm-${{ runner.os }}
+
+    - name: Bootstrap
+      shell: bash
+      run: ${{ github.action_path }}/scripts/bootstrap.sh
+      env:
+        GH_TOKEN: ${{ inputs.gh-token || github.token }}
+        INDIEPRISE_RUNTIME_KEY: ${{ inputs.runtime-key }}
+
+    - name: Pull config
+      shell: bash
+      run: ${{ github.action_path }}/scripts/pull-config.sh
+      env:
+        INDIEPRISE_RUNTIME_ORIGIN: ${{ inputs.runtime-origin }}
+
+    - name: Run migrataur
+      shell: bash
+      run: ${{ github.action_path }}/scripts/run-migrataur.sh ${{ inputs.mode }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Upload scan report
+      if: inputs.mode == 'scan'
+      uses: actions/upload-artifact@v4
+      with:
+        name: indieprise-scan-report
+        path: |
+          .migrataur/scan-report.json
+          .migrataur/scan-report.md
+        retention-days: 90
+        if-no-files-found: warn
+
+    - name: Upload bootstrap logs (crash diagnostics)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: indieprise-logs
+        path: /tmp/indieprise-bootstrap-logs/
+        retention-days: 7
+        if-no-files-found: ignore
