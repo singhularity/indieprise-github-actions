@@ -23,22 +23,39 @@ PREXPLAINER_BINARY=$(jq -r '.prexplainer.binary' "$VERSIONS_FILE")
 LLM_PROVIDER=""
 LLM_MODEL=""
 
-if [ -n "${MIGRATAUR_ANTHROPIC_KEY:-}" ]; then
-  LLM_PROVIDER="anthropic"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-claude-haiku-4-5-20251001}"
-  export ANTHROPIC_API_KEY="$MIGRATAUR_ANTHROPIC_KEY"
-elif [ -n "${MIGRATAUR_OPENAI_KEY:-}" ]; then
-  LLM_PROVIDER="openai"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gpt-4.1-mini}"
-  export OPENAI_API_KEY="$MIGRATAUR_OPENAI_KEY"
-elif [ -n "${MIGRATAUR_GEMINI_KEY:-}" ]; then
-  LLM_PROVIDER="google"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gemini-2.5-flash}"
-  export GEMINI_API_KEY="$MIGRATAUR_GEMINI_KEY"
-elif [ -n "${MIGRATAUR_OPENROUTER_KEY:-}" ]; then
-  LLM_PROVIDER="openrouter"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-anthropic/claude-haiku-4-5-20251001}"
-  export OPENROUTER_API_KEY="$MIGRATAUR_OPENROUTER_KEY"
+# INDIEPRISE_LLM_KEY is passed from action.yml input. Auto-detect provider
+# from key prefix, or fall back to Ollama if no key is provided.
+LLM_KEY="${INDIEPRISE_LLM_KEY:-}"
+
+if [ -n "$LLM_KEY" ]; then
+  case "$LLM_KEY" in
+    sk-ant-*|anthropic-*)
+      LLM_PROVIDER="anthropic"
+      LLM_MODEL="${MIGRATAUR_LLM_MODEL:-claude-haiku-4-5-20251001}"
+      export ANTHROPIC_API_KEY="$LLM_KEY"
+      ;;
+    sk-*)
+      LLM_PROVIDER="openai"
+      LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gpt-4.1-mini}"
+      export OPENAI_API_KEY="$LLM_KEY"
+      ;;
+    AIza*)
+      LLM_PROVIDER="google"
+      LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gemini-2.5-flash}"
+      export GEMINI_API_KEY="$LLM_KEY"
+      ;;
+    sk-or-*)
+      LLM_PROVIDER="openrouter"
+      LLM_MODEL="${MIGRATAUR_LLM_MODEL:-anthropic/claude-haiku-4-5-20251001}"
+      export OPENROUTER_API_KEY="$LLM_KEY"
+      ;;
+    *)
+      # Unknown prefix — assume Anthropic (most common)
+      LLM_PROVIDER="anthropic"
+      LLM_MODEL="${MIGRATAUR_LLM_MODEL:-claude-haiku-4-5-20251001}"
+      export ANTHROPIC_API_KEY="$LLM_KEY"
+      ;;
+  esac
 else
   LLM_PROVIDER="ollama"
   LLM_MODEL="${MIGRATAUR_LLM_MODEL:-kimi-k2.5:cloud}"

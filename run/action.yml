@@ -17,6 +17,10 @@ inputs:
     description: 'Runtime configuration origin'
     required: false
     default: ''
+  llm-key:
+    description: 'LLM API key (Anthropic, OpenAI, Gemini, or OpenRouter). Provider auto-detected from key prefix.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -45,6 +49,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.gh-token || github.token }}
         INDIEPRISE_RUNTIME_KEY: ${{ inputs.runtime-key }}
+        INDIEPRISE_LLM_KEY: ${{ inputs.llm-key }}
 
     - name: Pull config
       shell: bash
