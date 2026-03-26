@@ -29,7 +29,7 @@ if [ -n "${MIGRATAUR_ANTHROPIC_KEY:-}" ]; then
   export ANTHROPIC_API_KEY="$MIGRATAUR_ANTHROPIC_KEY"
 elif [ -n "${MIGRATAUR_OPENAI_KEY:-}" ]; then
   LLM_PROVIDER="openai"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gpt-4o-mini}"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-gpt-4.1-mini}"
   export OPENAI_API_KEY="$MIGRATAUR_OPENAI_KEY"
 elif [ -n "${MIGRATAUR_GEMINI_KEY:-}" ]; then
   LLM_PROVIDER="google"
