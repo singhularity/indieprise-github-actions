@@ -71,7 +71,7 @@ if [ -n "$LLM_KEY" ]; then
   chmod 600 "$PI_AUTH_DIR/auth.json"
 else
   LLM_PROVIDER="ollama"
-  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-kimi-k2.5:cloud}"
+  LLM_MODEL="${MIGRATAUR_LLM_MODEL:-kimi-k2.6:cloud}"
 fi
 
 echo "LLM provider: $LLM_PROVIDER (model: $LLM_MODEL)"
@@ -240,13 +240,10 @@ if [ "$LLM_PROVIDER" = "ollama" ]; then
       "apiKey": "ollama",
       "baseUrl": "http://127.0.0.1:11434/v1",
       "models": [
-        { "_launch": true, "id": "kimi-k2.5:cloud", "input": ["text", "image"], "reasoning": true },
+        { "_launch": true, "id": "kimi-k2.6:cloud", "input": ["text", "image"], "reasoning": true },
         { "id": "qwen3:8b", "input": ["text"], "reasoning": false },
         { "id": "qwen3:30b-a3b", "input": ["text"], "reasoning": true },
-        { "id": "gemma3:4b-cloud", "input": ["text"], "reasoning": false },
-        { "id": "gemma3:27b-cloud", "input": ["text"], "reasoning": false },
         { "id": "deepseek-v3.1:671b-cloud", "input": ["text"], "reasoning": true },
-        { "id": "qwen3-coder:480b-cloud", "input": ["text"], "reasoning": true },
         { "id": "gpt-oss:20b-cloud", "input": ["text"], "reasoning": false }
       ]
     }
